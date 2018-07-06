@@ -1,0 +1,93 @@
+---
+title: "index"
+author: "Mackenzie Young"
+date: "7/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Load required packages
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(caret)
+library(randomForest)
+```
+
+##Load the train and test data
+```{r, cache=TRUE}
+train_complete <- read.csv('pml-training.csv', na.strings = c("", "NA"))
+test <- read.csv('pml-testing.csv', na.strings = c("", "NA"))
+```
+
+##Clean the data
+To clean the data, I first removed columns with variables concerning kurtosis and skewness, as they were mostly NA values. Then, I went ahead and removed any row in which over 90% of the values were NA.
+\newline
+I also removed columns with variables that did not contain data relevant to predicting the class, such as username, timestamp data, and window data.
+```{r}
+train <- train_complete[,-grep('^kurtosis|^skewness',colnames(train_complete))]
+
+train <- train[, -which(colMeans(is.na(train)) > 0.9)]
+train <- select(train, -c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2',
+                          'cvtd_timestamp','new_window','num_window'))
+```
+
+Next, I partitioned the training data set into two subsets, one containing 75% of the training data, and one containing 25% of the training data. The larger set will remain as my training data set, and the smaller set will be used as a validatation set. The validation set will help to calculate an estimated out-of-sample error.
+```{r}
+set.seed(732)
+inTraining <- createDataPartition(train$classe, p = .75, list=FALSE)
+training <- train[inTraining,]
+validation <- train[-inTraining,]
+```
+
+
+```{r}
+test <- select(test, colnames(train[-53]))
+```
+
+
+##Fitting the model
+To help the random forest model run faster, I enabled parallel processing. The infomation on how to enable parallel processing was found here: https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-randomForestPerformance.md
+```{r, warning=FALSE, message=FALSE}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           allowParallel = TRUE)
+```
+
+I chose to run a random forest model on my training data to predict classe outcome using all other variables as predictors. Since there are so many features, the random forest model seemed like a reasonable model to use as it takes into consideration only a random subset of them at each node.
+```{r, cache=TRUE}
+fit <- train(classe~., data=training, method='rf', trControl = fitControl)
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+##Cross validation
+As you can see below, the random forest model did an excellent job assigning classes. Accuracy was over 99% for all five folds.
+```{r}
+fit$resample
+confusionMatrix(fit)
+```
+\newline
+The plot below shows how the error rate changes with an increasing number of trees. The error goes down as more trees are added, but eventually plateus.
+```{r}
+plot(fit$finalModel)
+```
+
+##Prediction
+Looking at the held-out validadtion data, the model also achieves over 99% accuracy in predicting the classes. Since the test data does not have the class labels and we cannot calculate the out-of-sample accuracy, we can treat this validation data as being a good estimate of the out-of-sample accuracy for our model.
+```{r}
+pred <- predict(fit, newdata=validation)
+confusionMatrix(pred, validation$classe)
+```
+
+We can also generate predictions for our test data, but without having the actual class labels in our data set to compare the predicted classes to, we cannot be sure that the model predicts the test classes with 100% accuracy.
+```{r}
+test_pred <- predict(fit, test)
+test_pred
+```
