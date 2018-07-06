@@ -2,7 +2,9 @@
 title: "index"
 author: "Mackenzie Young"
 date: "7/5/2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -24,7 +26,7 @@ test <- read.csv('pml-testing.csv', na.strings = c("", "NA"))
 
 ##Clean the data
 To clean the data, I first removed columns with variables concerning kurtosis and skewness, as they were mostly NA values. Then, I went ahead and removed any row in which over 90% of the values were NA.
-\newline
+
 I also removed columns with variables that did not contain data relevant to predicting the class, such as username, timestamp data, and window data.
 ```{r}
 train <- train_complete[,-grep('^kurtosis|^skewness',colnames(train_complete))]
@@ -73,7 +75,7 @@ As you can see below, the random forest model did an excellent job assigning cla
 fit$resample
 confusionMatrix(fit)
 ```
-\newline
+
 The plot below shows how the error rate changes with an increasing number of trees. The error goes down as more trees are added, but eventually plateus.
 ```{r}
 plot(fit$finalModel)
